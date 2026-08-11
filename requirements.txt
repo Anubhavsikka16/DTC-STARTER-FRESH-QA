@@ -16,6 +16,7 @@ cucumber-expressions==19.0.0
 cucumber-tag-expressions==9.1.0
 distro==1.9.0
 execnet==2.1.2
+Faker==40.36.0
 gherkin-official==29.0.0
 gitdb==4.0.12
 GitPython==3.1.47
