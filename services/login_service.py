@@ -16,6 +16,10 @@ class LoginService:
         self.login_page.enter_password(password)
         self.login_page.click_login_button()
 
-        logger.info("Ending login workflow")
+        dashboard_page = DashboardPage(self.login_page.page)
 
-        return DashboardPage(self.login_page.page)
+        dashboard_page.is_dashboard_loaded()
+
+        logger.info("Login successful")
+
+        return dashboard_page

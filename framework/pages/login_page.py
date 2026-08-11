@@ -19,4 +19,10 @@ class LoginPage(BasePage):
 
     def click_login_button(self):
         self.logger.info(f"clicking continue with email button")
-        self.login_button.click()
+        with self.page.expect_response(
+            lambda response: "/auth/" in response.url
+        ) as response_info:
+            self.login_button.click()
+            response = response_info.value
+
+            assert response.status == 200
