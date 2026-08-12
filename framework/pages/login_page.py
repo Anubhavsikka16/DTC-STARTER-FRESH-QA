@@ -1,4 +1,5 @@
 from framework.config.settings import settings
+from framework.pages.dashboardpage import DashboardPage
 
 from framework.pages.base_page import BasePage
 class LoginPage(BasePage):
@@ -26,3 +27,5 @@ class LoginPage(BasePage):
             response = response_info.value
 
             assert response.status == 200
+
+        return DashboardPage(self.page)

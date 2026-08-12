@@ -14,7 +14,7 @@ class ProductService:
 
         self.logger.info("Starting Create Product workflow")
 
-        create_page = self.products_page.click_create_product_button()
+        create_page = self.products_page.go_to_create_product()
 
         create_page.enter_title(title)
 

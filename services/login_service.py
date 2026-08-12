@@ -7,7 +7,7 @@ logger= get_logger(__name__)
 class LoginService:
 
     def __init__(self, page):
-        self.login_page=LoginPage(page)
+        self.login_page=LoginPage(page) # uses page objects and login_page will access page objects methods
 
     def login(self, email ,password):
         logger.info("Starting login workflow")
@@ -16,10 +16,14 @@ class LoginService:
         self.login_page.enter_password(password)
         self.login_page.click_login_button()
 
-        dashboard_page = DashboardPage(self.login_page.page)
+        dashboard_page = self.login_page.click_login_button()
 
         dashboard_page.is_dashboard_loaded()
 
         logger.info("Login successful")
 
-        return dashboard_page
+        return dashboard_page # this returned object goes into dashboard
+    '''         dashboard=login_service.login(
+                    settings.admin_email,
+                    settings.admin_password
+            )'''

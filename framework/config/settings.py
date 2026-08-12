@@ -33,4 +33,4 @@ class Settings(BaseSettings):
 settings = Settings() #settings.base_url: easy access instead of adding Settings() every time
 
 if __name__ == "__main__":
-    print(settings)
+    print(settings)#"Only execute this block if I directly run this file."

@@ -1,4 +1,3 @@
-from services.login_service import LoginService
 from framework.config.settings import settings
 import pytest
 
@@ -10,6 +9,9 @@ class TestAdminLogin:
             settings.admin_email,
             settings.admin_password
         )
+        '''
+        Run the login workflow and give me the DashboardPage object that represents the page we're now on."
+        '''
 
         dashboard.is_dashboard_loaded()
 
