@@ -15,3 +15,22 @@ class ProductDetailsPage(BasePage):
         time.sleep(5)
         expect(self.page.get_by_role("heading")).to_be_visible
 
+    def get_product_id(self):
+
+        url = self.page.url
+
+        match = re.search(
+            r"/products/(prod_[^/?]+)",
+            url
+        )
+
+        assert match, f"Product ID not found in URL: {url}"
+
+        product_id = match.group(1)
+
+        self.logger.info(
+            f"Extracted product ID: {product_id}"
+        )
+
+        return product_id
+

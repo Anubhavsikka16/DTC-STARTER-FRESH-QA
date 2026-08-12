@@ -1,5 +1,7 @@
 import pytest
 from framework.config.settings import settings
+from framework.utils.testdata import generate_product_data
+
 class TestCreateProductE2E:
 
     @pytest.mark.smoke
@@ -8,10 +10,13 @@ class TestCreateProductE2E:
                     settings.admin_email,
                     settings.admin_password
                 )
-        
+        product=generate_product_data()
         dashboard.is_dashboard_loaded()
 
-        details_page=product_service.create_product("Bomber Jacket", 60)
+        details_page=product_service.create_product(
+            product["title"],
+            product["usd_price"]
+        )
         
         details_page.is_product_details_page_loaded()
         

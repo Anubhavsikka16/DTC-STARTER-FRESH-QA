@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     # Application
     base_url: str
     api_base_url: str
+    
 
     # Admin
     admin_email: str
