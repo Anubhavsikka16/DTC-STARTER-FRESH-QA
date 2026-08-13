@@ -132,7 +132,19 @@ jobs:
         working-directory: medusa/apps/backend
         run: |
           pnpm exec medusa db:migrate
-
+    # ==================================================
+    #  Creating admin user
+    # ==================================================
+        
+      - name: Create CI admin user
+        working-directory: medusa/apps/backend
+        env:
+            ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+            ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+            pnpm exec medusa user \
+            --email "$ADMIN_EMAIL" \
+            --password "$ADMIN_PASSWORD"
       # ==================================================
       # 9. Start Medusa backend
       # ==================================================
