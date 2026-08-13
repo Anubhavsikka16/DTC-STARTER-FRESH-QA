@@ -193,26 +193,49 @@ jobs:
         run: |
           echo "Testing Medusa admin authentication..."
 
-          HTTP_STATUS=$(curl \
-            --silent \
-            --output /tmp/auth-response.json \
-            --write-out "%{http_code}" \
-            -X POST \
-            "http://localhost:9000/auth/user/emailpass" \
-            -H "Content-Type: application/json" \
-            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
 
-          echo "Authentication HTTP status: $HTTP_STATUS"
+          email = os.environ["ADMIN_EMAIL"]
+          password = os.environ["ADMIN_PASSWORD"]
 
-          echo "Authentication response:"
-          cat /tmp/auth-response.json
+          payload = json.dumps({
+              "email": email,
+              "password": password
+          }).encode("utf-8")
 
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "Admin authentication failed."
-            exit 1
-          fi
+          request = urllib.request.Request(
+              "http://localhost:9000/auth/user/emailpass",
+              data=payload,
+              headers={
+                  "Content-Type": "application/json"
+              },
+              method="POST"
+          )
 
-          echo "Admin authentication successful."
+          try:
+              with urllib.request.urlopen(request) as response:
+                  body = response.read().decode("utf-8")
+
+                  print(f"Authentication HTTP status: {response.status}")
+                  print("Authentication successful.")
+                  print("Response received.")
+
+                  if response.status != 200:
+                      raise SystemExit(1)
+
+          except urllib.error.HTTPError as error:
+              body = error.read().decode("utf-8")
+
+              print(f"Authentication HTTP status: {error.code}")
+              print("Authentication response:")
+              print(body)
+
+              raise SystemExit(1)
+          PY
 
       # ==================================================
       # 13. Setup Python
@@ -282,7 +305,7 @@ jobs:
           poetry run python -m pytest -m smoke -v
 
       # ==================================================
-      # 18. Upload Medusa logs if tests fail
+      # 18. Upload Medusa logs
       # ==================================================
       - name: Upload Medusa logs
         if: always()
