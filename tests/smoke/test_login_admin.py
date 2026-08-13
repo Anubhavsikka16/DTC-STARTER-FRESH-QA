@@ -12,7 +12,7 @@ def fingerprint(value):
 
 
 @pytest.mark.smoke
-def test_admin_login(self, login_service):
+def test_admin_login(login_service):
 
     print(
         "Test email fingerprint:",
