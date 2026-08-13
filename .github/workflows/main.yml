@@ -19,8 +19,14 @@ jobs:
 
     steps:
 
-      - name: Checkout repository
+      - name: Checkout QA repository
         uses: actions/checkout@v6
+
+      - name: Checkout Medusa application
+        uses: actions/checkout@v6
+        with:
+            repository: Anubhavsikka16/dtc-starter-clean
+            path: medusa
 
       - name: Setup Python
         uses: actions/setup-python@v6
