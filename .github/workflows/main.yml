@@ -150,7 +150,7 @@ jobs:
           echo "CI admin user creation completed."
 
       # ==================================================
-      # 10. Start Medusa backend
+      # 10. Start Medusa
       # ==================================================
       - name: Start Medusa
         working-directory: medusa/apps/backend
@@ -164,9 +164,11 @@ jobs:
         run: |
           echo "Waiting for Medusa to start..."
 
-          for i in {1..30}; do
+          for i in {1..60}; do
 
-            if curl --silent --fail http://localhost:9000/health > /dev/null; then
+            if curl --silent --fail \
+              http://localhost:9000/health > /dev/null; then
+
               echo "Medusa is ready!"
               exit 0
             fi
@@ -193,6 +195,15 @@ jobs:
         run: |
           echo "Testing Medusa admin authentication..."
 
+          echo "Admin email: $ADMIN_EMAIL"
+
+          if [ -n "$ADMIN_PASSWORD" ]; then
+            echo "Password configured: true"
+          else
+            echo "Password configured: false"
+            exit 1
+          fi
+
           python - <<'PY'
           import json
           import os
@@ -218,21 +229,44 @@ jobs:
 
           try:
               with urllib.request.urlopen(request) as response:
+
                   body = response.read().decode("utf-8")
 
-                  print(f"Authentication HTTP status: {response.status}")
-                  print("Authentication successful.")
-                  print("Response received.")
+                  print(
+                      f"Authentication HTTP status: "
+                      f"{response.status}"
+                  )
 
-                  if response.status != 200:
+                  if response.status == 200:
+                      print(
+                          "Admin authentication "
+                          "successful."
+                      )
+                  else:
+                      print(
+                          "Admin authentication failed."
+                      )
+                      print(body)
                       raise SystemExit(1)
 
           except urllib.error.HTTPError as error:
+
               body = error.read().decode("utf-8")
 
-              print(f"Authentication HTTP status: {error.code}")
-              print("Authentication response:")
+              print(
+                  f"Authentication HTTP status: "
+                  f"{error.code}"
+              )
+
+              print(
+                  "Authentication response:"
+              )
+
               print(body)
+
+              print(
+                  "Admin authentication failed."
+              )
 
               raise SystemExit(1)
           PY
@@ -253,21 +287,29 @@ jobs:
           pip install poetry
 
       # ==================================================
-      # 15. Install QA dependencies
+      # 15. Verify Poetry environment
+      # ==================================================
+      - name: Verify Poetry
+        run: |
+          poetry --version
+          poetry env info
+
+      # ==================================================
+      # 16. Install QA dependencies
       # ==================================================
       - name: Install QA dependencies
         run: |
           poetry install --no-root
 
       # ==================================================
-      # 16. Install Playwright
+      # 17. Install Playwright Chromium
       # ==================================================
       - name: Install Playwright Chromium
         run: |
           poetry run playwright install --with-deps chromium
 
       # ==================================================
-      # 17. Run smoke tests
+      # 18. Run smoke tests
       # ==================================================
       - name: Run smoke tests
         env:
@@ -305,7 +347,7 @@ jobs:
           poetry run python -m pytest -m smoke -v
 
       # ==================================================
-      # 18. Upload Medusa logs
+      # 19. Upload Medusa logs
       # ==================================================
       - name: Upload Medusa logs
         if: always()
