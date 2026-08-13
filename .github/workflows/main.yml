@@ -19,121 +19,212 @@ jobs:
 
     services:
 
-        postgres:
-            image: postgres:15-alpine
-            env:
-                POSTGRES_DB: medusa-backend
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: postgres
-            ports:
-            - 5432:5432
-            options: >-
-                --health-cmd="pg_isready -U postgres -d medusa-backend"
-                --health-interval=10s
-                --health-timeout=5s
-                --health-retries=5
+      # --------------------------------------------------
+      # PostgreSQL
+      # --------------------------------------------------
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: medusa-backend
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
 
-        redis:
-            image: redis:7-alpine
-            ports:
-             - 6379:6379
-            options: >-
-                --health-cmd="redis-cli ping"
-                --health-interval=10s
-                --health-timeout=5s
-                --health-retries=5
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd="pg_isready -U postgres -d medusa-backend"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      # --------------------------------------------------
+      # Redis
+      # --------------------------------------------------
+      redis:
+        image: redis:7-alpine
+
+        ports:
+          - 6379:6379
+
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Checkout QA automation repository
-      # --------------------------------------------------
+      # ==================================================
+      # 1. Checkout QA repository
+      # ==================================================
       - name: Checkout QA repository
         uses: actions/checkout@v6
 
-      # --------------------------------------------------
-      # 2. Checkout Medusa application repository
-      # --------------------------------------------------
+      # ==================================================
+      # 2. Checkout Medusa application
+      # ==================================================
       - name: Checkout Medusa application
         uses: actions/checkout@v6
         with:
           repository: Anubhavsikka16/dtc-starter-clean
           path: medusa
 
-      # --------------------------------------------------
-      # 3. Setup Node.js for Medusa
-      # --------------------------------------------------
+      # ==================================================
+      # 3. Setup Node.js
+      # ==================================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # --------------------------------------------------
+      # ==================================================
       # 4. Setup pnpm
-      # --------------------------------------------------
+      # ==================================================
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.11.1
           run_install: false
 
-      # --------------------------------------------------
+      # ==================================================
       # 5. Verify Node and pnpm
-      # --------------------------------------------------
+      # ==================================================
       - name: Verify Node and pnpm
         run: |
           node --version
           pnpm --version
 
-      # --------------------------------------------------
+      # ==================================================
       # 6. Install Medusa dependencies
-      # --------------------------------------------------
+      # ==================================================
       - name: Install Medusa dependencies
         working-directory: medusa
         run: pnpm install --frozen-lockfile
 
-      # --------------------------------------------------
-      # 7. Setup Python
-      # --------------------------------------------------
+      # ==================================================
+      # 7. Create Medusa CI environment
+      # ==================================================
+      - name: Create Medusa environment
+        working-directory: medusa/apps/backend
+        run: |
+          cat > .env <<'EOF'
+
+          STORE_CORS=http://localhost:8000
+          ADMIN_CORS=http://localhost:5173,http://localhost:9000
+          AUTH_CORS=http://localhost:5173,http://localhost:9000
+
+          REDIS_URL=redis://localhost:6379
+
+          JWT_SECRET=ci-test-jwt-secret
+          COOKIE_SECRET=ci-test-cookie-secret
+
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/medusa-backend
+
+          DB_NAME=medusa-backend
+
+          EOF
+
+      # ==================================================
+      # 8. Run Medusa database migrations
+      # ==================================================
+      - name: Run Medusa migrations
+        working-directory: medusa/apps/backend
+        run: |
+          pnpm exec medusa db:migrate
+
+      # ==================================================
+      # 9. Start Medusa backend
+      # ==================================================
+      - name: Start Medusa
+        working-directory: medusa
+        run: |
+          pnpm backend:dev > medusa.log 2>&1 &
+
+      # ==================================================
+      # 10. Wait for Medusa
+      # ==================================================
+      - name: Wait for Medusa
+        run: |
+          echo "Waiting for Medusa to start..."
+
+          for i in {1..30}; do
+
+            if curl --silent --fail http://localhost:9000/health > /dev/null; then
+              echo "Medusa is ready!"
+              exit 0
+            fi
+
+            echo "Medusa is not ready yet..."
+            sleep 2
+
+          done
+
+          echo "Medusa failed to start."
+
+          echo "========== MEDUSA LOGS =========="
+          cat medusa/medusa.log
+
+          exit 1
+
+      # ==================================================
+      # 11. Setup Python
+      # ==================================================
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
-      # --------------------------------------------------
-      # 8. Install Poetry
-      # --------------------------------------------------
+      # ==================================================
+      # 12. Install Poetry
+      # ==================================================
       - name: Install Poetry
-        run: pip install poetry
+        run: |
+          pip install poetry
 
-      # --------------------------------------------------
-      # 9. Install QA dependencies
-      # --------------------------------------------------
+      # ==================================================
+      # 13. Install QA dependencies
+      # ==================================================
       - name: Install QA dependencies
-        run: poetry install --no-root
+        run: |
+          poetry install --no-root
 
-      # --------------------------------------------------
-      # 10. Install Playwright browsers
-      # --------------------------------------------------
+      # ==================================================
+      # 14. Install Playwright Chromium
+      # ==================================================
       - name: Install Playwright Chromium
-        run: poetry run playwright install --with-deps chromium
+        run: |
+          poetry run playwright install --with-deps chromium
 
-      # --------------------------------------------------
-      # 11. Run smoke tests
-      # --------------------------------------------------
+      # ==================================================
+      # 15. Run smoke tests
+      # ==================================================
       - name: Run smoke tests
         env:
+
+          # -------------------------------
+          # Application
+          # -------------------------------
           BASE_URL: ${{ secrets.BASE_URL }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
+          # -------------------------------
+          # Admin credentials
+          # -------------------------------
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
+          # -------------------------------
+          # Browser
+          # -------------------------------
           BROWSER: ${{ secrets.BROWSER }}
           HEADLESS: ${{ secrets.HEADLESS }}
           SLOW_MO: ${{ secrets.SLOW_MO }}
           TIMEOUT: ${{ secrets.TIMEOUT }}
 
+          # -------------------------------
+          # Database
+          # -------------------------------
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
