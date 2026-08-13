@@ -25,6 +25,10 @@ class LoginPage(BasePage):
         ) as response_info:
             self.login_button.click()
             response = response_info.value
+            self.logger.info(f"Login response URL: {response.url}")
+            self.logger.info(f"Login response status: {response.status}")
+            self.logger.info(f"Login response body: {response.text()}")
+
 
             assert response.status == 200
 
