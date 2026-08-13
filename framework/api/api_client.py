@@ -23,6 +23,6 @@ class APIClient:
     def post(self, endpoint, data=None):
 
         return self.session.post(
-            f"{self.base_url}{endpoint}",
+            f"{self.api_base_url}{endpoint}",
             json=data
         )

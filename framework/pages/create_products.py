@@ -1,6 +1,6 @@
 from framework.pages.base_page import BasePage
 from framework.pages.product_details import ProductDetailsPage
-import time
+
 class CreateProductPage(BasePage):
 
     def __init__(self, page):
@@ -17,13 +17,13 @@ class CreateProductPage(BasePage):
         self.logger.info(f"Entering title: {title}")
 
         self.title.fill(title)
-        time.sleep(2)
+        
     def continue_to_organization(self):
         self.continue_button.click()
 
     def continue_to_pricing(self):
         self.continue_button.click()
-        time.sleep(2)
+        
 
     def save(self):
         self.logger.info("Publishing product")

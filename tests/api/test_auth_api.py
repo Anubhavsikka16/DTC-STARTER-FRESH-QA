@@ -7,10 +7,10 @@ from framework.api.product_api import ProductAPI
 def test_api_login():
 
     auth_api = AuthAPI(
-        settings.api_base_url
+        settings.api_base_url #fetching the API Base URL
     )
 
-    token = auth_api.login(
+    token = auth_api.login( #login using email and pwd by sending the POST requesr
         settings.admin_email,
         settings.admin_password
     )
@@ -37,4 +37,3 @@ def test_api_login():
     assert response.status_code == 200
     print("Status:", response.status_code)
 
-    assert response.status_code == 200

@@ -1,4 +1,3 @@
-from framework.api.api_client import APIClient
 
 
 class ProductAPI:
