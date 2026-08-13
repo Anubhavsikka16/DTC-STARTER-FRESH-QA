@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   smoke-tests:
-
     runs-on: ubuntu-latest
 
     services:
@@ -142,9 +141,13 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
+          echo "Creating CI admin user..."
+
           pnpm exec medusa user \
             --email "$ADMIN_EMAIL" \
             --password "$ADMIN_PASSWORD"
+
+          echo "CI admin user creation completed."
 
       # ==================================================
       # 10. Start Medusa backend
@@ -152,7 +155,7 @@ jobs:
       - name: Start Medusa
         working-directory: medusa/apps/backend
         run: |
-            pnpm dev > /tmp/medusa.log 2>&1 &
+          pnpm dev > /tmp/medusa.log 2>&1 &
 
       # ==================================================
       # 11. Wait for Medusa
@@ -181,7 +184,38 @@ jobs:
           exit 1
 
       # ==================================================
-      # 12. Setup Python
+      # 12. Verify admin authentication
+      # ==================================================
+      - name: Verify admin authentication
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          echo "Testing Medusa admin authentication..."
+
+          HTTP_STATUS=$(curl \
+            --silent \
+            --output /tmp/auth-response.json \
+            --write-out "%{http_code}" \
+            -X POST \
+            "http://localhost:9000/auth/user/emailpass" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
+
+          echo "Authentication HTTP status: $HTTP_STATUS"
+
+          echo "Authentication response:"
+          cat /tmp/auth-response.json
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Admin authentication failed."
+            exit 1
+          fi
+
+          echo "Admin authentication successful."
+
+      # ==================================================
+      # 13. Setup Python
       # ==================================================
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -189,28 +223,28 @@ jobs:
           python-version: "3.14"
 
       # ==================================================
-      # 13. Install Poetry
+      # 14. Install Poetry
       # ==================================================
       - name: Install Poetry
         run: |
           pip install poetry
 
       # ==================================================
-      # 14. Install QA dependencies
+      # 15. Install QA dependencies
       # ==================================================
       - name: Install QA dependencies
         run: |
           poetry install --no-root
 
       # ==================================================
-      # 15. Install Playwright
+      # 16. Install Playwright
       # ==================================================
       - name: Install Playwright Chromium
         run: |
           poetry run playwright install --with-deps chromium
 
       # ==================================================
-      # 16. Run smoke tests
+      # 17. Run smoke tests
       # ==================================================
       - name: Run smoke tests
         env:
@@ -218,8 +252,8 @@ jobs:
           # ----------------------------------------------
           # Application
           # ----------------------------------------------
-          BASE_URL: ${{ secrets.BASE_URL }}
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          BASE_URL: http://localhost:9000
+          API_BASE_URL: http://localhost:9000
 
           # ----------------------------------------------
           # Admin credentials
@@ -230,19 +264,30 @@ jobs:
           # ----------------------------------------------
           # Browser
           # ----------------------------------------------
-          BROWSER: ${{ secrets.BROWSER }}
-          HEADLESS: ${{ secrets.HEADLESS }}
-          SLOW_MO: ${{ secrets.SLOW_MO }}
-          TIMEOUT: ${{ secrets.TIMEOUT }}
+          BROWSER: chromium
+          HEADLESS: true
+          SLOW_MO: 0
+          TIMEOUT: 30000
 
           # ----------------------------------------------
           # Database
           # ----------------------------------------------
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: medusa-backend
+          DB_USER: postgres
+          DB_PASSWORD: postgres
 
         run: |
           poetry run python -m pytest -m smoke -v
+
+      # ==================================================
+      # 18. Upload Medusa logs if tests fail
+      # ==================================================
+      - name: Upload Medusa logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medusa-logs
+          path: /tmp/medusa.log
+          if-no-files-found: ignore
