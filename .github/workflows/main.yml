@@ -193,6 +193,7 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
+
           echo "Testing Medusa admin authentication..."
 
           echo "Admin email: $ADMIN_EMAIL"
@@ -204,6 +205,31 @@ jobs:
             exit 1
           fi
 
+          # ----------------------------------------------
+          # Create safe fingerprints
+          # ----------------------------------------------
+          python - <<'PY'
+          import hashlib
+          import os
+
+          email = os.environ["ADMIN_EMAIL"]
+          password = os.environ["ADMIN_PASSWORD"]
+
+          email_hash = hashlib.sha256(
+              email.encode("utf-8")
+          ).hexdigest()[:12]
+
+          password_hash = hashlib.sha256(
+              password.encode("utf-8")
+          ).hexdigest()[:12]
+
+          print(f"CI email fingerprint: {email_hash}")
+          print(f"CI password fingerprint: {password_hash}")
+          PY
+
+          # ----------------------------------------------
+          # Test authentication
+          # ----------------------------------------------
           python - <<'PY'
           import json
           import os
@@ -228,6 +254,7 @@ jobs:
           )
 
           try:
+
               with urllib.request.urlopen(request) as response:
 
                   body = response.read().decode("utf-8")
@@ -238,15 +265,19 @@ jobs:
                   )
 
                   if response.status == 200:
+
                       print(
-                          "Admin authentication "
-                          "successful."
+                          "Admin authentication successful."
                       )
+
                   else:
+
                       print(
                           "Admin authentication failed."
                       )
+
                       print(body)
+
                       raise SystemExit(1)
 
           except urllib.error.HTTPError as error:
@@ -287,7 +318,7 @@ jobs:
           pip install poetry
 
       # ==================================================
-      # 15. Verify Poetry environment
+      # 15. Verify Poetry
       # ==================================================
       - name: Verify Poetry
         run: |
@@ -344,6 +375,9 @@ jobs:
           DB_PASSWORD: postgres
 
         run: |
+
+          echo "Running smoke tests..."
+
           poetry run python -m pytest -m smoke -v
 
       # ==================================================
