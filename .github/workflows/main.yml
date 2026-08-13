@@ -19,11 +19,12 @@ jobs:
 
     services:
 
-      # --------------------------------------------------
+      # ==================================================
       # PostgreSQL
-      # --------------------------------------------------
+      # ==================================================
       postgres:
         image: postgres:15-alpine
+
         env:
           POSTGRES_DB: medusa-backend
           POSTGRES_USER: postgres
@@ -38,9 +39,9 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-      # --------------------------------------------------
+      # ==================================================
       # Redis
-      # --------------------------------------------------
+      # ==================================================
       redis:
         image: redis:7-alpine
 
@@ -100,7 +101,8 @@ jobs:
       # ==================================================
       - name: Install Medusa dependencies
         working-directory: medusa
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
 
       # ==================================================
       # 7. Create Medusa CI environment
@@ -109,7 +111,6 @@ jobs:
         working-directory: medusa/apps/backend
         run: |
           cat > .env <<'EOF'
-
           STORE_CORS=http://localhost:8000
           ADMIN_CORS=http://localhost:5173,http://localhost:9000
           AUTH_CORS=http://localhost:5173,http://localhost:9000
@@ -122,7 +123,6 @@ jobs:
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/medusa-backend
 
           DB_NAME=medusa-backend
-
           EOF
 
       # ==================================================
@@ -132,29 +132,30 @@ jobs:
         working-directory: medusa/apps/backend
         run: |
           pnpm exec medusa db:migrate
-    # ==================================================
-    #  Creating admin user
-    # ==================================================
-        
+
+      # ==================================================
+      # 9. Create CI admin user
+      # ==================================================
       - name: Create CI admin user
         working-directory: medusa/apps/backend
         env:
-            ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-            ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-            pnpm exec medusa user \
+          pnpm exec medusa user \
             --email "$ADMIN_EMAIL" \
             --password "$ADMIN_PASSWORD"
-      # ==================================================
-      # 9. Start Medusa backend
-      # ==================================================
-      - name: Start Medusa
-        working-directory: medusa
-        run: |
-          pnpm backend:dev > medusa.log 2>&1 &
 
       # ==================================================
-      # 10. Wait for Medusa
+      # 10. Start Medusa backend
+      # ==================================================
+      - name: Start Medusa
+        working-directory: medusa/apps/backend
+        run: |
+          pnpm dev > medusa.log 2>&1 &
+
+      # ==================================================
+      # 11. Wait for Medusa
       # ==================================================
       - name: Wait for Medusa
         run: |
@@ -175,12 +176,12 @@ jobs:
           echo "Medusa failed to start."
 
           echo "========== MEDUSA LOGS =========="
-          cat medusa/medusa.log
+          cat medusa/apps/backend/medusa.log
 
           exit 1
 
       # ==================================================
-      # 11. Setup Python
+      # 12. Setup Python
       # ==================================================
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -188,55 +189,55 @@ jobs:
           python-version: "3.14"
 
       # ==================================================
-      # 12. Install Poetry
+      # 13. Install Poetry
       # ==================================================
       - name: Install Poetry
         run: |
           pip install poetry
 
       # ==================================================
-      # 13. Install QA dependencies
+      # 14. Install QA dependencies
       # ==================================================
       - name: Install QA dependencies
         run: |
           poetry install --no-root
 
       # ==================================================
-      # 14. Install Playwright Chromium
+      # 15. Install Playwright
       # ==================================================
       - name: Install Playwright Chromium
         run: |
           poetry run playwright install --with-deps chromium
 
       # ==================================================
-      # 15. Run smoke tests
+      # 16. Run smoke tests
       # ==================================================
       - name: Run smoke tests
         env:
 
-          # -------------------------------
+          # ----------------------------------------------
           # Application
-          # -------------------------------
+          # ----------------------------------------------
           BASE_URL: ${{ secrets.BASE_URL }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
-          # -------------------------------
+          # ----------------------------------------------
           # Admin credentials
-          # -------------------------------
+          # ----------------------------------------------
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-          # -------------------------------
+          # ----------------------------------------------
           # Browser
-          # -------------------------------
+          # ----------------------------------------------
           BROWSER: ${{ secrets.BROWSER }}
           HEADLESS: ${{ secrets.HEADLESS }}
           SLOW_MO: ${{ secrets.SLOW_MO }}
           TIMEOUT: ${{ secrets.TIMEOUT }}
 
-          # -------------------------------
+          # ----------------------------------------------
           # Database
-          # -------------------------------
+          # ----------------------------------------------
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
