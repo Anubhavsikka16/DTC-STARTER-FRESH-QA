@@ -152,7 +152,7 @@ jobs:
       - name: Start Medusa
         working-directory: medusa/apps/backend
         run: |
-          pnpm dev > medusa.log 2>&1 &
+            pnpm dev > /tmp/medusa.log 2>&1 &
 
       # ==================================================
       # 11. Wait for Medusa
@@ -176,7 +176,7 @@ jobs:
           echo "Medusa failed to start."
 
           echo "========== MEDUSA LOGS =========="
-          cat medusa/apps/backend/medusa.log
+          cat /tmp/medusa.log
 
           exit 1
 
