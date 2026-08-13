@@ -19,63 +19,100 @@ jobs:
 
     steps:
 
+      # --------------------------------------------------
+      # 1. Checkout QA automation repository
+      # --------------------------------------------------
       - name: Checkout QA repository
         uses: actions/checkout@v6
 
+      # --------------------------------------------------
+      # 2. Checkout Medusa application repository
+      # --------------------------------------------------
       - name: Checkout Medusa application
         uses: actions/checkout@v6
         with:
-            repository: Anubhavsikka16/dtc-starter-clean
-            path: medusa
+          repository: Anubhavsikka16/dtc-starter-clean
+          path: medusa
 
+      # --------------------------------------------------
+      # 3. Setup Node.js for Medusa
+      # --------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-            node-version: "20"
-            cache: "pnpm"
-            cache-dependency-path: medusa/pnpm-lock.yaml
+          node-version: "20"
 
+      # --------------------------------------------------
+      # 4. Setup pnpm
+      # --------------------------------------------------
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-            version: 10.11.1
-            run_install: false
+          version: 10.11.1
+          run_install: false
 
+      # --------------------------------------------------
+      # 5. Verify Node and pnpm
+      # --------------------------------------------------
+      - name: Verify Node and pnpm
+        run: |
+          node --version
+          pnpm --version
+
+      # --------------------------------------------------
+      # 6. Install Medusa dependencies
+      # --------------------------------------------------
       - name: Install Medusa dependencies
         working-directory: medusa
         run: pnpm install --frozen-lockfile
 
+      # --------------------------------------------------
+      # 7. Setup Python
+      # --------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
+      # --------------------------------------------------
+      # 8. Install Poetry
+      # --------------------------------------------------
       - name: Install Poetry
         run: pip install poetry
 
-      - name: Install dependencies
+      # --------------------------------------------------
+      # 9. Install QA dependencies
+      # --------------------------------------------------
+      - name: Install QA dependencies
         run: poetry install --no-root
 
-      - name: Install Playwright browsers
+      # --------------------------------------------------
+      # 10. Install Playwright browsers
+      # --------------------------------------------------
+      - name: Install Playwright Chromium
         run: poetry run playwright install --with-deps chromium
 
+      # --------------------------------------------------
+      # 11. Run smoke tests
+      # --------------------------------------------------
       - name: Run smoke tests
         env:
-            BASE_URL: ${{ secrets.BASE_URL }}
-            API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
-            ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-            ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-            BROWSER: ${{ secrets.BROWSER }}
-            HEADLESS: ${{ secrets.HEADLESS }}
-            SLOW_MO: ${{ secrets.SLOW_MO }}
-            TIMEOUT: ${{ secrets.TIMEOUT }}
+          BROWSER: ${{ secrets.BROWSER }}
+          HEADLESS: ${{ secrets.HEADLESS }}
+          SLOW_MO: ${{ secrets.SLOW_MO }}
+          TIMEOUT: ${{ secrets.TIMEOUT }}
 
-            DB_HOST: ${{ secrets.DB_HOST }}
-            DB_PORT: ${{ secrets.DB_PORT }}
-            DB_NAME: ${{ secrets.DB_NAME }}
-            DB_USER: ${{ secrets.DB_USER }}
-            DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
-        run: poetry run python -m pytest -m smoke -v
+        run: |
+          poetry run python -m pytest -m smoke -v
