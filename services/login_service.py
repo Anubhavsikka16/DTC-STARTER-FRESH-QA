@@ -14,7 +14,7 @@ class LoginService:
 
         self.login_page.enter_email(email)
         self.login_page.enter_password(password)
-        self.login_page.click_login_button()
+        #self.login_page.click_login_button()
 
         dashboard_page = self.login_page.click_login_button()
 

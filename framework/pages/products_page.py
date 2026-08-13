@@ -10,8 +10,8 @@ class ProductsPage(BasePage):
         self.create_button=self.page.get_by_role('link', name='Create')
 
     def go_to_create_product(self):
-        # self.logger.info("Clicking Products link on left side panel")
-        # self.click_products_link.click()    
+        self.logger.info("Clicking Products link on left side panel")
+        self.click_products_link.click()    
         self.logger.info("Clicking Create Product button")
         self.create_button.click()
 
