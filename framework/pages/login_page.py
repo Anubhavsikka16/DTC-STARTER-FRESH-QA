@@ -11,6 +11,9 @@ class LoginPage(BasePage):
         self.login_button=self.page.get_by_text("Continue with Email")
 
     def enter_email(self, email):
+        self.logger.info(f"Current URL: {self.page.url}")
+        self.logger.info(f"Page title: {self.page.title()}")
+
         self.logger.info(f"entering email address: {email}")
         self.email.fill(email)
 
