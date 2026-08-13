@@ -28,6 +28,23 @@ jobs:
             repository: Anubhavsikka16/dtc-starter-clean
             path: medusa
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+            node-version: "20"
+            cache: "pnpm"
+            cache-dependency-path: medusa/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+            version: 10.11.1
+            run_install: false
+
+      - name: Install Medusa dependencies
+        working-directory: medusa
+        run: pnpm install --frozen-lockfile
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
