@@ -1,4 +1,4 @@
-
+import hashlib
 import json
 
 from framework.pages.base_page import BasePage
@@ -12,9 +12,16 @@ class LoginPage(BasePage):
 
         self.email = self.page.get_by_placeholder("Email")
         self.password = self.page.get_by_placeholder("Password")
-        self.login_button = self.page.get_by_text("Continue with Email")
+        self.login_button = self.page.get_by_text(
+            "Continue with Email"
+        )
 
-        
+    @staticmethod
+    def _fingerprint(value: str) -> str:
+        """Create a safe fingerprint without exposing the value."""
+        return hashlib.sha256(
+            value.encode("utf-8")
+        ).hexdigest()[:12]
 
     def enter_email(self, email: str):
         self.logger.info(
@@ -26,7 +33,7 @@ class LoginPage(BasePage):
         )
 
         self.logger.info(
-            f"Entering email. "
+            "Entering email. "
             f"Length={len(email)}, "
             f"Fingerprint={self._fingerprint(email)}"
         )
@@ -35,7 +42,7 @@ class LoginPage(BasePage):
 
     def enter_password(self, password: str):
         self.logger.info(
-            f"Entering password. "
+            "Entering password. "
             f"Length={len(password)}, "
             f"Fingerprint={self._fingerprint(password)}"
         )
@@ -66,10 +73,10 @@ class LoginPage(BasePage):
         )
 
         # ----------------------------------------------
-        # Inspect the actual browser request
+        # Inspect browser request
         # ----------------------------------------------
-        request = response.request
 
+        request = response.request
         post_data = request.post_data
 
         if post_data:
@@ -77,49 +84,44 @@ class LoginPage(BasePage):
             try:
                 payload = json.loads(post_data)
 
-                email = payload.get("email")
-                password = payload.get("password")
+                request_email = payload.get("email")
+                request_password = payload.get("password")
 
-                if email is not None:
-
+                if request_email is not None:
                     self.logger.info(
                         "Browser request email fingerprint: "
-                        f"{self._fingerprint(email)}"
+                        f"{self._fingerprint(request_email)}"
                     )
 
                     self.logger.info(
                         "Browser request email length: "
-                        f"{len(email)}"
+                        f"{len(request_email)}"
                     )
 
-                if password is not None:
-
+                if request_password is not None:
                     self.logger.info(
                         "Browser request password fingerprint: "
-                        f"{self._fingerprint(password)}"
+                        f"{self._fingerprint(request_password)}"
                     )
 
                     self.logger.info(
                         "Browser request password length: "
-                        f"{len(password)}"
+                        f"{len(request_password)}"
                     )
 
             except json.JSONDecodeError:
-
                 self.logger.warning(
                     "Unable to parse login request body as JSON."
                 )
 
         # ----------------------------------------------
-        # Log response body
+        # Response body
         # ----------------------------------------------
+
         response_body = response.text()
 
         self.logger.info(
             f"Login response body: {response_body}"
         )
 
-        # ----------------------------------------------
-        # Return response to service layer
-        # ----------------------------------------------
         return response, DashboardPage(self.page)
