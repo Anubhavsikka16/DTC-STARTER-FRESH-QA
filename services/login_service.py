@@ -1,3 +1,5 @@
+from loguru import logger
+
 from framework.pages.login_page import LoginPage
 
 
@@ -6,12 +8,15 @@ class LoginService:
     def __init__(self, page):
         self.page = page
         self.login_page = LoginPage(page)
+        self.logger = logger
 
     def login(self, email: str, password: str):
 
-        self.logger.info(
-            "Starting login workflow"
-        )
+        # Remove accidental whitespace/newlines from CI secrets
+        email = email.strip()
+        password = password.strip()
+
+        self.logger.info("Starting login workflow")
 
         self.login_page.enter_email(email)
 
@@ -21,10 +26,31 @@ class LoginService:
             self.login_page.click_login_button()
         )
 
-        assert response.status == 200, (
-            f"Login failed. "
-            f"Status={response.status}, "
-            f"Response={response.text()}"
+        self.logger.info(
+            f"Authentication response status: "
+            f"{response.status}"
+        )
+
+        if response.status != 200:
+
+            self.logger.error(
+                f"Login failed with status "
+                f"{response.status}"
+            )
+
+            self.logger.error(
+                f"Login response: {response.text()}"
+            )
+
+            raise AssertionError(
+                f"Login failed. "
+                f"Expected 200, "
+                f"got {response.status}. "
+                f"Response: {response.text()}"
+            )
+
+        self.logger.info(
+            "Login successful"
         )
 
         return dashboard_page
