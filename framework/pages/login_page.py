@@ -1,4 +1,4 @@
-import hashlib
+
 import json
 
 from framework.pages.base_page import BasePage
@@ -16,14 +16,7 @@ class LoginPage(BasePage):
 
     @staticmethod
     def _fingerprint(value: str) -> str:
-        """
-        Create a safe fingerprint for debugging.
-
-        We never print the actual email/password.
-        """
-        return hashlib.sha256(
-            value.encode("utf-8")
-        ).hexdigest()[:12]
+        
 
     def enter_email(self, email: str):
         self.logger.info(

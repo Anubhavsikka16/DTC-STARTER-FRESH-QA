@@ -1,14 +1,9 @@
-import hashlib
+
 
 import pytest
 
 from framework.config.settings import settings
 
-
-def fingerprint(value):
-    return hashlib.sha256(
-        value.encode("utf-8")
-    ).hexdigest()[:12]
 
 
 @pytest.mark.smoke

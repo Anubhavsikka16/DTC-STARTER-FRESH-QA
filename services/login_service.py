@@ -12,10 +12,6 @@ class LoginService:
 
     def login(self, email: str, password: str):
 
-        # Remove accidental whitespace/newlines from CI secrets
-        email = email.strip()
-        password = password.strip()
-
         self.logger.info("Starting login workflow")
 
         self.login_page.enter_email(email)
@@ -49,8 +45,6 @@ class LoginService:
                 f"Response: {response.text()}"
             )
 
-        self.logger.info(
-            "Login successful"
-        )
+        self.logger.info("Login successful")
 
         return dashboard_page
