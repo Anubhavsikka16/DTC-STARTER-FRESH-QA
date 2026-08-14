@@ -14,8 +14,6 @@ class LoginPage(BasePage):
         self.password = self.page.get_by_placeholder("Password")
         self.login_button = self.page.get_by_text("Continue with Email")
 
-    @staticmethod
-    def _fingerprint(value: str) -> str:
         
 
     def enter_email(self, email: str):
