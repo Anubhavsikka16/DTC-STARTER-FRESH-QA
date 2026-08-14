@@ -135,13 +135,6 @@ jobs:
 
       # ==================================================
       # 9. Prepare admin credentials
-      #
-      # Normalize the GitHub secrets once.
-      # These exact values will be used for:
-      #
-      #   1. Creating the Medusa user
-      #   2. Running the QA tests
-      #
       # ==================================================
       - name: Prepare CI admin credentials
         env:
@@ -189,17 +182,23 @@ jobs:
 
       # ==================================================
       # 11. Start Medusa
+      #
+      # IMPORTANT:
+      # Log file is outside apps/backend.
+      #
+      # Otherwise Medusa watcher sees medusa.log
+      # changing and continuously restarts itself.
       # ==================================================
       - name: Start Medusa
         working-directory: medusa/apps/backend
         run: |
           echo "Starting Medusa..."
 
-          pnpm dev > medusa.log 2>&1 &
+          pnpm dev > /tmp/medusa.log 2>&1 &
 
-          echo $! > medusa.pid
+          echo $! > /tmp/medusa.pid
 
-          echo "Medusa PID: $(cat medusa.pid)"
+          echo "Medusa PID: $(cat /tmp/medusa.pid)"
 
       # ==================================================
       # 12. Wait for Medusa
@@ -210,7 +209,12 @@ jobs:
 
           for i in {1..60}; do
 
-            if curl --silent --fail \
+            echo "Checking Medusa... attempt $i/60"
+
+            if curl \
+              --silent \
+              --show-error \
+              --fail \
               http://localhost:9000/health \
               > /dev/null; then
 
@@ -219,30 +223,40 @@ jobs:
 
             fi
 
-            echo "Medusa is not ready yet..."
+            if [ -f /tmp/medusa.log ]; then
+              echo "----- Latest Medusa logs -----"
+              tail -30 /tmp/medusa.log
+            fi
+
             sleep 2
 
           done
 
-          echo "Medusa failed to start."
+          echo ""
+          echo "=========================================="
+          echo "Medusa failed to start"
+          echo "=========================================="
 
+          echo ""
           echo "========== MEDUSA LOGS =========="
 
-          if [ -f medusa/apps/backend/medusa.log ]; then
-            cat medusa/apps/backend/medusa.log
+          if [ -f /tmp/medusa.log ]; then
+            cat /tmp/medusa.log
           else
-            echo "Medusa log file not found."
+            echo "ERROR: /tmp/medusa.log does not exist"
           fi
+
+          echo ""
+          echo "========== PORT 9000 =========="
+
+          lsof -i :9000 || true
 
           exit 1
 
       # ==================================================
-      # 13. Verify Medusa authentication API
+      # 13. Verify Medusa admin authentication
       #
-      # This verifies that the SAME credentials used
-      # to create the user can authenticate against
-      # the running Medusa instance.
-      #
+      # This is an API-level check before Playwright.
       # ==================================================
       - name: Verify Medusa admin authentication
         env:
@@ -257,33 +271,52 @@ jobs:
           echo "Admin email length: ${#ADMIN_EMAIL}"
           echo "Admin password length: ${#ADMIN_PASSWORD}"
 
-          AUTH_RESPONSE=$(curl \
-            --silent \
-            --show-error \
-            --request POST \
-            --header "Content-Type: application/json" \
-            --data "$(python -c 'import json, os; print(json.dumps({"email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"]}))')" \
-            http://localhost:9000/auth/user/emailpass)
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          import urllib.error
 
-          AUTH_STATUS=$(curl \
-            --silent \
-            --output /tmp/auth_response.json \
-            --write-out "%{http_code}" \
-            --request POST \
-            --header "Content-Type: application/json" \
-            --data "$(python -c 'import json, os; print(json.dumps({"email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"]}))')" \
-            http://localhost:9000/auth/user/emailpass)
+          email = os.environ["ADMIN_EMAIL"]
+          password = os.environ["ADMIN_PASSWORD"]
 
-          echo "Authentication HTTP status: $AUTH_STATUS"
-          echo "Authentication response:"
-          cat /tmp/auth_response.json
+          payload = json.dumps({
+              "email": email,
+              "password": password
+          }).encode()
 
-          if [ "$AUTH_STATUS" != "200" ]; then
-            echo "Admin authentication failed."
-            exit 1
-          fi
+          request = urllib.request.Request(
+              "http://localhost:9000/auth/user/emailpass",
+              data=payload,
+              headers={
+                  "Content-Type": "application/json"
+              },
+              method="POST"
+          )
 
-          echo "Admin authentication successful."
+          try:
+              with urllib.request.urlopen(request) as response:
+                  body = response.read().decode()
+
+                  print(f"Authentication HTTP status: {response.status}")
+                  print("Authentication response:")
+                  print(body)
+
+                  if response.status != 200:
+                      raise SystemExit(1)
+
+                  print("Admin authentication successful.")
+
+          except urllib.error.HTTPError as error:
+              body = error.read().decode()
+
+              print(f"Authentication HTTP status: {error.code}")
+              print("Authentication response:")
+              print(body)
+
+              print("Admin authentication failed.")
+              raise SystemExit(1)
+          PY
 
       # ==================================================
       # 14. Setup Python
@@ -332,9 +365,7 @@ jobs:
           # ----------------------------------------------
           # Admin credentials
           #
-          # IMPORTANT:
-          # These are the SAME credentials used when
-          # creating the Medusa admin user.
+          # Same credentials used to create Medusa user.
           # ----------------------------------------------
           ADMIN_EMAIL: ${{ env.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ env.ADMIN_PASSWORD }}
@@ -362,12 +393,12 @@ jobs:
           poetry run python -m pytest -m smoke -v
 
       # ==================================================
-      # 19. Upload Medusa logs if tests fail
+      # 19. Upload Medusa logs
       # ==================================================
       - name: Upload Medusa logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: medusa-logs
-          path: medusa/apps/backend/medusa.log
+          path: /tmp/medusa.log
           if-no-files-found: warn
