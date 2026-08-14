@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   smoke-tests:
+
     runs-on: ubuntu-latest
 
     services:
@@ -104,7 +105,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       # ==================================================
-      # 7. Create Medusa CI environment
+      # 7. Create Medusa environment
       # ==================================================
       - name: Create Medusa environment
         working-directory: medusa/apps/backend
@@ -133,15 +134,52 @@ jobs:
           pnpm exec medusa db:migrate
 
       # ==================================================
-      # 9. Create CI admin user
+      # 9. Prepare admin credentials
+      #
+      # Normalize the GitHub secrets once.
+      # These exact values will be used for:
+      #
+      #   1. Creating the Medusa user
+      #   2. Running the QA tests
+      #
+      # ==================================================
+      - name: Prepare CI admin credentials
+        env:
+          ADMIN_EMAIL_SECRET: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD_SECRET: ${{ secrets.ADMIN_PASSWORD }}
+
+        run: |
+          ADMIN_EMAIL="$(printf '%s' "$ADMIN_EMAIL_SECRET" | tr -d '\r\n')"
+          ADMIN_PASSWORD="$(printf '%s' "$ADMIN_PASSWORD_SECRET" | tr -d '\r\n')"
+
+          if [ -z "$ADMIN_EMAIL" ]; then
+            echo "ERROR: ADMIN_EMAIL is empty"
+            exit 1
+          fi
+
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            echo "ERROR: ADMIN_PASSWORD is empty"
+            exit 1
+          fi
+
+          echo "ADMIN_EMAIL=$ADMIN_EMAIL" >> "$GITHUB_ENV"
+          echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> "$GITHUB_ENV"
+
+          echo "Admin email configured: true"
+          echo "Admin password configured: true"
+          echo "Admin email length: ${#ADMIN_EMAIL}"
+          echo "Admin password length: ${#ADMIN_PASSWORD}"
+
+      # ==================================================
+      # 10. Create Medusa admin user
       # ==================================================
       - name: Create CI admin user
         working-directory: medusa/apps/backend
-        env:
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
           echo "Creating CI admin user..."
+
+          echo "Admin email length: ${#ADMIN_EMAIL}"
+          echo "Admin password length: ${#ADMIN_PASSWORD}"
 
           pnpm exec medusa user \
             --email "$ADMIN_EMAIL" \
@@ -150,15 +188,21 @@ jobs:
           echo "CI admin user creation completed."
 
       # ==================================================
-      # 10. Start Medusa
+      # 11. Start Medusa
       # ==================================================
       - name: Start Medusa
         working-directory: medusa/apps/backend
         run: |
-          pnpm dev > /tmp/medusa.log 2>&1 &
+          echo "Starting Medusa..."
+
+          pnpm dev > medusa.log 2>&1 &
+
+          echo $! > medusa.pid
+
+          echo "Medusa PID: $(cat medusa.pid)"
 
       # ==================================================
-      # 11. Wait for Medusa
+      # 12. Wait for Medusa
       # ==================================================
       - name: Wait for Medusa
         run: |
@@ -167,10 +211,12 @@ jobs:
           for i in {1..60}; do
 
             if curl --silent --fail \
-              http://localhost:9000/health > /dev/null; then
+              http://localhost:9000/health \
+              > /dev/null; then
 
               echo "Medusa is ready!"
               exit 0
+
             fi
 
             echo "Medusa is not ready yet..."
@@ -181,129 +227,66 @@ jobs:
           echo "Medusa failed to start."
 
           echo "========== MEDUSA LOGS =========="
-          cat /tmp/medusa.log
+
+          if [ -f medusa/apps/backend/medusa.log ]; then
+            cat medusa/apps/backend/medusa.log
+          else
+            echo "Medusa log file not found."
+          fi
 
           exit 1
 
       # ==================================================
-      # 12. Verify admin authentication
+      # 13. Verify Medusa authentication API
+      #
+      # This verifies that the SAME credentials used
+      # to create the user can authenticate against
+      # the running Medusa instance.
+      #
       # ==================================================
-      - name: Verify admin authentication
+      - name: Verify Medusa admin authentication
         env:
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-        run: |
+          ADMIN_EMAIL: ${{ env.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ env.ADMIN_PASSWORD }}
 
+        run: |
           echo "Testing Medusa admin authentication..."
 
-          echo "Admin email: $ADMIN_EMAIL"
+          echo "Admin email configured: true"
+          echo "Password configured: true"
+          echo "Admin email length: ${#ADMIN_EMAIL}"
+          echo "Admin password length: ${#ADMIN_PASSWORD}"
 
-          if [ -n "$ADMIN_PASSWORD" ]; then
-            echo "Password configured: true"
-          else
-            echo "Password configured: false"
+          AUTH_RESPONSE=$(curl \
+            --silent \
+            --show-error \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --data "$(python -c 'import json, os; print(json.dumps({"email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"]}))')" \
+            http://localhost:9000/auth/user/emailpass)
+
+          AUTH_STATUS=$(curl \
+            --silent \
+            --output /tmp/auth_response.json \
+            --write-out "%{http_code}" \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --data "$(python -c 'import json, os; print(json.dumps({"email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"]}))')" \
+            http://localhost:9000/auth/user/emailpass)
+
+          echo "Authentication HTTP status: $AUTH_STATUS"
+          echo "Authentication response:"
+          cat /tmp/auth_response.json
+
+          if [ "$AUTH_STATUS" != "200" ]; then
+            echo "Admin authentication failed."
             exit 1
           fi
 
-          # ----------------------------------------------
-          # Create safe fingerprints
-          # ----------------------------------------------
-          python - <<'PY'
-          import hashlib
-          import os
-
-          email = os.environ["ADMIN_EMAIL"]
-          password = os.environ["ADMIN_PASSWORD"]
-
-          email_hash = hashlib.sha256(
-              email.encode("utf-8")
-          ).hexdigest()[:12]
-
-          password_hash = hashlib.sha256(
-              password.encode("utf-8")
-          ).hexdigest()[:12]
-
-          print(f"CI email fingerprint: {email_hash}")
-          print(f"CI password fingerprint: {password_hash}")
-          PY
-
-          # ----------------------------------------------
-          # Test authentication
-          # ----------------------------------------------
-          python - <<'PY'
-          import json
-          import os
-          import urllib.error
-          import urllib.request
-
-          email = os.environ["ADMIN_EMAIL"]
-          password = os.environ["ADMIN_PASSWORD"]
-
-          payload = json.dumps({
-              "email": email,
-              "password": password
-          }).encode("utf-8")
-
-          request = urllib.request.Request(
-              "http://localhost:9000/auth/user/emailpass",
-              data=payload,
-              headers={
-                  "Content-Type": "application/json"
-              },
-              method="POST"
-          )
-
-          try:
-
-              with urllib.request.urlopen(request) as response:
-
-                  body = response.read().decode("utf-8")
-
-                  print(
-                      f"Authentication HTTP status: "
-                      f"{response.status}"
-                  )
-
-                  if response.status == 200:
-
-                      print(
-                          "Admin authentication successful."
-                      )
-
-                  else:
-
-                      print(
-                          "Admin authentication failed."
-                      )
-
-                      print(body)
-
-                      raise SystemExit(1)
-
-          except urllib.error.HTTPError as error:
-
-              body = error.read().decode("utf-8")
-
-              print(
-                  f"Authentication HTTP status: "
-                  f"{error.code}"
-              )
-
-              print(
-                  "Authentication response:"
-              )
-
-              print(body)
-
-              print(
-                  "Admin authentication failed."
-              )
-
-              raise SystemExit(1)
-          PY
+          echo "Admin authentication successful."
 
       # ==================================================
-      # 13. Setup Python
+      # 14. Setup Python
       # ==================================================
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -311,19 +294,14 @@ jobs:
           python-version: "3.14"
 
       # ==================================================
-      # 14. Install Poetry
+      # 15. Install Poetry
       # ==================================================
       - name: Install Poetry
         run: |
+          python -m pip install --upgrade pip
           pip install poetry
 
-      # ==================================================
-      # 15. Verify Poetry
-      # ==================================================
-      - name: Verify Poetry
-        run: |
           poetry --version
-          poetry env info
 
       # ==================================================
       # 16. Install QA dependencies
@@ -333,7 +311,7 @@ jobs:
           poetry install --no-root
 
       # ==================================================
-      # 17. Install Playwright Chromium
+      # 17. Install Playwright
       # ==================================================
       - name: Install Playwright Chromium
         run: |
@@ -348,45 +326,48 @@ jobs:
           # ----------------------------------------------
           # Application
           # ----------------------------------------------
-          BASE_URL: http://localhost:9000/app
+          BASE_URL: http://localhost:9000
           API_BASE_URL: http://localhost:9000
 
           # ----------------------------------------------
           # Admin credentials
+          #
+          # IMPORTANT:
+          # These are the SAME credentials used when
+          # creating the Medusa admin user.
           # ----------------------------------------------
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ env.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ env.ADMIN_PASSWORD }}
 
           # ----------------------------------------------
           # Browser
           # ----------------------------------------------
           BROWSER: chromium
-          HEADLESS: true
-          SLOW_MO: 0
-          TIMEOUT: 30000
+          HEADLESS: "true"
+          SLOW_MO: "0"
+          TIMEOUT: "30000"
 
           # ----------------------------------------------
           # Database
           # ----------------------------------------------
           DB_HOST: localhost
-          DB_PORT: 5432
+          DB_PORT: "5432"
           DB_NAME: medusa-backend
           DB_USER: postgres
           DB_PASSWORD: postgres
 
         run: |
-
           echo "Running smoke tests..."
 
           poetry run python -m pytest -m smoke -v
 
       # ==================================================
-      # 19. Upload Medusa logs
+      # 19. Upload Medusa logs if tests fail
       # ==================================================
       - name: Upload Medusa logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: medusa-logs
-          path: /tmp/medusa.log
-          if-no-files-found: ignore
+          path: medusa/apps/backend/medusa.log
+          if-no-files-found: warn
